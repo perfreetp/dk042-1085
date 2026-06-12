@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #334155;
+  background: linear-gradient(180deg, #FAFAFA 0%, #F5F0EB 100%);
+  min-height: 100vh;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+@layer components {
+  .card-base {
+    @apply bg-white rounded-2xl shadow-soft border border-slate-100 p-6 transition-all duration-300;
+  }
+  .card-hover {
+    @apply hover:shadow-card hover:-translate-y-0.5;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-warm text-white font-medium shadow-float hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-slate-700 font-medium border border-slate-200 hover:border-coral-200 hover:text-coral-600 hover:bg-coral-50 transition-all duration-300;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-slate-600 font-medium hover:bg-slate-100 transition-all duration-300;
+  }
+  .tab-active {
+    @apply bg-coral-500 text-white shadow-md;
+  }
+  .tab-inactive {
+    @apply bg-white text-slate-600 hover:bg-slate-50 border border-slate-200;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 font-medium transition-all duration-300 hover:bg-coral-50 hover:text-coral-600;
+  }
+  .nav-item-active {
+    @apply bg-gradient-warm text-white shadow-float hover:text-white;
+  }
+}
