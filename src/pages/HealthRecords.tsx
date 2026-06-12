@@ -8,6 +8,10 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Heart,
+  Lightbulb,
+  CheckCircle2,
+  Info,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
@@ -67,6 +71,124 @@ export default function HealthRecords() {
       return `${avg.toFixed(0)}/${(sum2 / recent.length).toFixed(0)}`;
     }
     return avg.toFixed(activeMetric === 'temperature' ? 1 : 0);
+  })();
+
+  const healthSummary = (() => {
+    const data = filteredMetrics;
+    if (data.length === 0) {
+      return {
+        level: 'normal',
+        levelText: '暂无数据',
+        levelDesc: '该时间段内暂无测量记录',
+        trend: 'stable' as 'up' | 'down' | 'stable',
+        trendText: '—',
+        abnormalCount: 0,
+        tips: ['建议定期测量，关注身体健康状况'],
+        systolicTrend: 'stable' as 'up' | 'down' | 'stable',
+        diastolicTrend: 'stable' as 'up' | 'down' | 'stable',
+      };
+    }
+
+    const abnormalCount = data.filter((m) => m.status !== 'normal').length;
+    const abnormalRate = abnormalCount / data.length;
+
+    let level: 'excellent' | 'good' | 'warning' | 'danger' = 'good';
+    let levelText = '整体良好';
+    let levelDesc = '各项指标基本在正常范围内';
+
+    if (abnormalRate === 0) {
+      level = 'excellent';
+      levelText = '状态优秀';
+      levelDesc = '所有测量结果均在正常范围内';
+    } else if (abnormalRate < 0.2) {
+      level = 'good';
+      levelText = '整体良好';
+      levelDesc = '大部分指标正常，偶有波动';
+    } else if (abnormalRate < 0.5) {
+      level = 'warning';
+      levelText = '需要关注';
+      levelDesc = '异常次数较多，建议加强监测';
+    } else {
+      level = 'danger';
+      levelText = '警惕风险';
+      levelDesc = '异常比例较高，建议及时就医咨询';
+    }
+
+    const mid = Math.floor(data.length / 2);
+    const firstHalf = data.slice(0, mid);
+    const secondHalf = data.slice(mid);
+
+    const avgFirst = firstHalf.reduce((acc, m) => acc + m.value, 0) / (firstHalf.length || 1);
+    const avgSecond = secondHalf.reduce((acc, m) => acc + m.value, 0) / (secondHalf.length || 1);
+    const diff = avgSecond - avgFirst;
+    const diffPercent = avgFirst > 0 ? (diff / avgFirst) * 100 : 0;
+
+    let trend: 'up' | 'down' | 'stable' = 'stable';
+    let trendText = '趋势平稳';
+    if (Math.abs(diffPercent) > 5) {
+      if (diff > 0) {
+        trend = 'up';
+        trendText = `呈上升趋势（↑${diffPercent.toFixed(1)}%）`;
+      } else {
+        trend = 'down';
+        trendText = `呈下降趋势（↓${Math.abs(diffPercent).toFixed(1)}%）`;
+      }
+    }
+
+    let systolicTrend: 'up' | 'down' | 'stable' = 'stable';
+    let diastolicTrend: 'up' | 'down' | 'stable' = 'stable';
+    if (activeMetric === 'blood_pressure') {
+      const sysFirst = firstHalf.reduce((acc, m) => acc + m.value, 0) / (firstHalf.length || 1);
+      const sysSecond = secondHalf.reduce((acc, m) => acc + m.value, 0) / (secondHalf.length || 1);
+      const sysDiff = sysSecond - sysFirst;
+      const sysDiffPercent = sysFirst > 0 ? (sysDiff / sysFirst) * 100 : 0;
+      systolicTrend = Math.abs(sysDiffPercent) > 5 ? (sysDiff > 0 ? 'up' : 'down') : 'stable';
+
+      const diaFirst = firstHalf.reduce((acc, m) => acc + (m.value2 || 0), 0) / (firstHalf.length || 1);
+      const diaSecond = secondHalf.reduce((acc, m) => acc + (m.value2 || 0), 0) / (secondHalf.length || 1);
+      const diaDiff = diaSecond - diaFirst;
+      const diaDiffPercent = diaFirst > 0 ? (diaDiff / diaFirst) * 100 : 0;
+      diastolicTrend = Math.abs(diaDiffPercent) > 5 ? (diaDiff > 0 ? 'up' : 'down') : 'stable';
+    }
+
+    const tips: string[] = [];
+    if (activeMetric === 'blood_pressure') {
+      const highSystolic = data.filter((m) => m.value > 140).length;
+      const highDiastolic = data.filter((m) => (m.value2 || 0) > 90).length;
+      if (highSystolic > 0) tips.push(`收缩压有 ${highSystolic} 次偏高，注意减少盐的摄入`);
+      if (highDiastolic > 0) tips.push(`舒张压有 ${highDiastolic} 次偏高，注意保持情绪稳定`);
+      if (systolicTrend === 'up') tips.push('收缩压呈上升趋势，建议定期监测并就医评估');
+      if (diastolicTrend === 'up') tips.push('舒张压呈上升趋势，建议保证充足睡眠');
+      if (level === 'excellent') tips.push('血压控制良好，请继续保持健康的生活方式');
+      if (tips.length === 0) tips.push('血压整体平稳，继续保持健康作息');
+    } else if (activeMetric === 'blood_sugar') {
+      if (trend === 'up') tips.push('血糖呈上升趋势，注意控制碳水化合物摄入');
+      if (abnormalCount > 0) tips.push(`有 ${abnormalCount} 次血糖异常，建议规律饮食和运动`);
+      if (level === 'excellent') tips.push('血糖控制良好，请继续保持');
+      if (tips.length === 0) tips.push('血糖整体平稳，继续保持健康饮食');
+    } else if (activeMetric === 'heart_rate') {
+      if (trend === 'up') tips.push('心率呈上升趋势，注意休息和情绪管理');
+      if (abnormalCount > 0) tips.push(`有 ${abnormalCount} 次心率异常，建议避免剧烈运动`);
+      if (level === 'excellent') tips.push('心率状态良好，运动能力佳');
+      if (tips.length === 0) tips.push('心率整体平稳，状态良好');
+    } else if (activeMetric === 'temperature') {
+      if (abnormalCount > 0) tips.push(`有 ${abnormalCount} 次体温异常，注意观察身体状况`);
+      if (trend === 'up') tips.push('体温呈上升趋势，注意有无感染迹象');
+      if (level === 'excellent') tips.push('体温正常，身体状态良好');
+      if (tips.length === 0) tips.push('体温正常，继续保持');
+    }
+
+    return {
+      level,
+      levelText,
+      levelDesc,
+      trend,
+      trendText,
+      abnormalCount,
+      tips,
+      systolicTrend,
+      diastolicTrend,
+    };
   })();
 
   const reports = [
@@ -169,10 +291,129 @@ export default function HealthRecords() {
               </div>
             </div>
           </div>
-          <HealthTrendChart data={healthMetrics} type={activeMetric} height={340} showLegend />
+          <HealthTrendChart data={filteredMetrics} type={activeMetric} height={340} showLegend />
         </Card>
 
-        <Card>
+        <div className="space-y-6">
+          <Card>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  'w-11 h-11 rounded-xl flex items-center justify-center',
+                  healthSummary.level === 'excellent' && 'bg-teal-50',
+                  healthSummary.level === 'good' && 'bg-sky-50',
+                  healthSummary.level === 'warning' && 'bg-sun-50',
+                  healthSummary.level === 'danger' && 'bg-coral-50',
+                )}>
+                  {healthSummary.level === 'excellent' || healthSummary.level === 'good' ? (
+                    <CheckCircle2 className={cn(
+                      'w-5 h-5',
+                      healthSummary.level === 'excellent' && 'text-teal-500',
+                      healthSummary.level === 'good' && 'text-sky-500',
+                    )} />
+                  ) : (
+                    <AlertCircle className={cn(
+                      'w-5 h-5',
+                      healthSummary.level === 'warning' && 'text-sun-500',
+                      healthSummary.level === 'danger' && 'text-coral-500',
+                    )} />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-semibold text-slate-800">健康小结</h3>
+                  <p className="text-xs text-slate-500">{activeRange === '7d' ? '近7天' : activeRange === '30d' ? '近30天' : '近90天'}数据综合评估</p>
+                </div>
+              </div>
+              <StatusBadge
+                label={healthSummary.levelText}
+                variant={
+                  healthSummary.level === 'excellent' ? 'success' :
+                  healthSummary.level === 'good' ? 'info' :
+                  healthSummary.level === 'warning' ? 'warning' : 'error'
+                }
+              />
+            </div>
+
+            <p className="text-sm text-slate-600 mb-4">{healthSummary.levelDesc}</p>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="p-3 rounded-xl bg-cream-50">
+                <p className="text-xs text-slate-500 mb-1">总测量次数</p>
+                <p className="text-lg font-bold font-serif text-slate-800">{filteredMetrics.length} 次</p>
+              </div>
+              <div className="p-3 rounded-xl bg-coral-50">
+                <p className="text-xs text-slate-500 mb-1">异常次数</p>
+                <p className="text-lg font-bold font-serif text-coral-500">{healthSummary.abnormalCount} 次</p>
+              </div>
+            </div>
+
+            {activeMetric === 'blood_pressure' ? (
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-coral-400"></span>
+                    收缩压趋势
+                  </span>
+                  <span className={cn(
+                    'font-medium flex items-center gap-1',
+                    healthSummary.systolicTrend === 'up' && 'text-coral-500',
+                    healthSummary.systolicTrend === 'down' && 'text-teal-500',
+                    healthSummary.systolicTrend === 'stable' && 'text-slate-500',
+                  )}>
+                    {healthSummary.systolicTrend === 'up' && <TrendingUp className="w-4 h-4" />}
+                    {healthSummary.systolicTrend === 'down' && <TrendingDown className="w-4 h-4" />}
+                    {healthSummary.systolicTrend === 'stable' && <Minus className="w-4 h-4" />}
+                    {healthSummary.systolicTrend === 'up' ? '偏高' : healthSummary.systolicTrend === 'down' ? '偏低' : '平稳'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
+                    舒张压趋势
+                  </span>
+                  <span className={cn(
+                    'font-medium flex items-center gap-1',
+                    healthSummary.diastolicTrend === 'up' && 'text-coral-500',
+                    healthSummary.diastolicTrend === 'down' && 'text-teal-500',
+                    healthSummary.diastolicTrend === 'stable' && 'text-slate-500',
+                  )}>
+                    {healthSummary.diastolicTrend === 'up' && <TrendingUp className="w-4 h-4" />}
+                    {healthSummary.diastolicTrend === 'down' && <TrendingDown className="w-4 h-4" />}
+                    {healthSummary.diastolicTrend === 'stable' && <Minus className="w-4 h-4" />}
+                    {healthSummary.diastolicTrend === 'up' ? '偏高' : healthSummary.diastolicTrend === 'down' ? '偏低' : '平稳'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-cream-50 mb-4">
+                <span className="text-sm text-slate-600">整体趋势</span>
+                <span className={cn(
+                  'font-medium flex items-center gap-1 text-sm',
+                  healthSummary.trend === 'up' && 'text-coral-500',
+                  healthSummary.trend === 'down' && 'text-teal-500',
+                  healthSummary.trend === 'stable' && 'text-slate-500',
+                )}>
+                  {healthSummary.trend === 'up' && <TrendingUp className="w-4 h-4" />}
+                  {healthSummary.trend === 'down' && <TrendingDown className="w-4 h-4" />}
+                  {healthSummary.trend === 'stable' && <Minus className="w-4 h-4" />}
+                  {healthSummary.trendText}
+                </span>
+              </div>
+            )}
+
+            <div className="p-3 rounded-xl bg-sun-50 border border-sun-100">
+              <div className="flex items-start gap-2">
+                <Lightbulb className="w-4 h-4 text-sun-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  {healthSummary.tips.map((tip, idx) => (
+                    <p key={idx} className="text-xs text-slate-700 leading-relaxed">{tip}</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-coral-50 flex items-center justify-center">
@@ -229,6 +470,7 @@ export default function HealthRecords() {
             )}
           </div>
         </Card>
+        </div>
       </div>
 
       <Card>

@@ -50,7 +50,6 @@ export default function HealthTrendChart({ data, type, height = 260, showLegend 
 
   const chartData = data
     .filter((m) => m.type === type)
-    .slice(-28)
     .map((m) => ({
       time: formatDate(m.timestamp, 'time'),
       date: formatDate(m.timestamp, 'month'),

@@ -18,6 +18,11 @@ import {
   User,
   Star,
   Image as ImageIcon,
+  MapPin,
+  Play,
+  Camera,
+  FileText,
+  CircleDot,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
@@ -618,6 +623,93 @@ export default function ServiceBooking() {
                 <div>
                   <p className="text-xs text-slate-500 mb-1">服务费用</p>
                   <p className="font-bold text-coral-500 font-serif text-lg">{formatMoney(currentDetailBooking.totalAmount)}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  服务过程
+                </p>
+                <div className="relative pl-5">
+                  <div className="absolute left-2 top-2 bottom-2 w-0.5 bg-slate-100" />
+                  {(() => {
+                    const statusOrder: { key: string; label: string; icon: any; time?: string }[] = [];
+                    const s = currentDetailBooking.status;
+                    const dateStr = currentDetailBooking.scheduledDate;
+                    const timeStr = currentDetailBooking.scheduledTime;
+
+                    statusOrder.push({ key: 'created', label: '预约提交', icon: FileText, time: `${dateStr} ${timeStr}` });
+
+                    if (s !== 'pending' && s !== 'cancelled') {
+                      statusOrder.push({ key: 'confirmed', label: '预约确认', icon: Check, time: `${dateStr} ${timeStr}` });
+                    }
+
+                    if (s === 'pending') {
+                      statusOrder.push({ key: 'pending', label: '等待确认', icon: Clock });
+                    } else if (s === 'in_progress') {
+                      statusOrder.push({ key: 'arrived', label: '照护人员到达', icon: MapPin, time: `${dateStr} ${timeStr}` });
+                      statusOrder.push({ key: 'ongoing', label: '服务进行中', icon: Play });
+                    } else if (s === 'completed') {
+                      const endTime = (() => {
+                        const [h, m] = timeStr.split(':').map(Number);
+                        const endH = h + currentDetailBooking.duration;
+                        return `${String(Math.floor(endH)).padStart(2, '0')}:${m}`;
+                      })();
+                      statusOrder.push({ key: 'arrived', label: '照护人员到达', icon: MapPin, time: `${dateStr} ${timeStr}` });
+                      statusOrder.push({ key: 'started', label: '开始服务', icon: Play, time: `${dateStr} ${timeStr}` });
+                      statusOrder.push({ key: 'completed', label: '服务完成', icon: Check, time: `${dateStr} ${endTime}` });
+                      if (currentDetailBooking.photos && currentDetailBooking.photos.length > 0) {
+                        statusOrder.push({ key: 'photos', label: '照片回传', icon: Camera, time: `${dateStr} ${endTime}` });
+                      }
+                      if (currentDetailBooking.rating) {
+                        statusOrder.push({ key: 'rated', label: '已评价', icon: Star, time: `${dateStr} ${endTime}` });
+                      }
+                    } else if (s === 'cancelled') {
+                      statusOrder.push({ key: 'cancelled', label: '已取消', icon: X });
+                    }
+
+                    const currentIdx = statusOrder.length - 1;
+
+                    return statusOrder.map((node, idx) => {
+                      const isCompleted = idx < currentIdx || (s === 'completed' && idx === currentIdx && node.key !== 'ongoing');
+                      const isCurrent = idx === currentIdx && s !== 'completed' && s !== 'cancelled';
+                      const isCancelled = node.key === 'cancelled';
+                      const Icon = node.icon;
+
+                      return (
+                        <div key={node.key} className="relative pb-4 last:pb-0">
+                          <div
+                            className={cn(
+                              'absolute -left-5 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all',
+                              isCompleted && !isCancelled && 'bg-teal-500 border-teal-500 text-white',
+                              isCurrent && 'bg-coral-500 border-coral-500 text-white animate-pulse-soft',
+                              !isCompleted && !isCurrent && !isCancelled && 'bg-white border-slate-200 text-slate-300',
+                              isCancelled && 'bg-slate-400 border-slate-400 text-white'
+                            )}
+                          >
+                            <Icon className="w-2.5 h-2.5" strokeWidth={3} />
+                          </div>
+                          <div className="ml-2">
+                            <div className="flex items-center justify-between">
+                              <p className={cn(
+                                'text-sm font-medium',
+                                isCompleted && !isCancelled && 'text-slate-700',
+                                isCurrent && 'text-coral-600',
+                                !isCompleted && !isCurrent && !isCancelled && 'text-slate-400',
+                                isCancelled && 'text-slate-500'
+                              )}>
+                                {node.label}
+                              </p>
+                              {node.time && (
+                                <span className="text-xs text-slate-400">{node.time}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 

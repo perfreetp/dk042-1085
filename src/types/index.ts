@@ -71,6 +71,7 @@ export interface ServiceBookingRecord {
   createdAt: string;
   photos?: string[];
   rating?: number;
+  transactionId?: string;
 }
 
 export type NotificationType = 'warning' | 'service' | 'system' | 'photo';
@@ -97,6 +98,7 @@ export interface Transaction {
   paymentMethod?: string;
   status: 'success' | 'pending' | 'failed';
   createdAt: string;
+  bookingId?: string;
 }
 
 export interface EmergencyContact {
