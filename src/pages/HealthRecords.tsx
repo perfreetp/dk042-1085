@@ -38,9 +38,17 @@ export default function HealthRecords() {
   const [activeRange, setActiveRange] = useState('30d');
   const [activeMetric, setActiveMetric] = useState<HealthMetricType>('blood_pressure');
 
-  const filteredMetrics = healthMetrics.filter((m) => m.type === activeMetric);
+  const rangeDays = activeRange === '7d' ? 7 : activeRange === '30d' ? 30 : 90;
+  const now = Date.now();
+  const rangeMs = rangeDays * 24 * 60 * 60 * 1000;
+
+  const filteredMetrics = healthMetrics.filter(
+    (m) => m.type === activeMetric && now - new Date(m.timestamp).getTime() <= rangeMs
+  );
   const recentMetrics = filteredMetrics.slice(-10).reverse();
-  const abnormalMetrics = healthMetrics.filter((m) => m.status !== 'normal').slice(-8).reverse();
+  const abnormalMetrics = healthMetrics.filter(
+    (m) => m.status !== 'normal' && now - new Date(m.timestamp).getTime() <= rangeMs
+  ).slice(-8).reverse();
 
   const normalRange = {
     blood_pressure: '90-140 / 60-90 mmHg',
@@ -50,7 +58,7 @@ export default function HealthRecords() {
   }[activeMetric];
 
   const avgValue = (() => {
-    const recent = filteredMetrics.slice(-28);
+    const recent = filteredMetrics;
     if (recent.length === 0) return '-';
     const sum = recent.reduce((acc, m) => acc + m.value, 0);
     const avg = sum / recent.length;
@@ -209,7 +217,7 @@ export default function HealthRecords() {
                     className={`text-xl font-bold font-serif ${getHealthMetricColor(metric.status)}`}
                   >
                     {metric.type === 'blood_pressure'
-                      ? `${metric.value}/${metric.value2} {metric.unit}`
+                      ? `${metric.value}/${metric.value2} ${metric.unit}`
                       : `${metric.value} ${metric.unit}`}
                   </p>
                   <Activity className="w-4 h-4 text-slate-400" />

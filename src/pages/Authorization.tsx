@@ -47,11 +47,40 @@ export default function Authorization() {
   const toggleContactEnabled = useAppStore((s) => s.toggleContactEnabled);
   const toggleCaregiverEnabled = useAppStore((s) => s.toggleCaregiverEnabled);
   const updateCaregiverPermission = useAppStore((s) => s.updateCaregiverPermission);
+  const addEmergencyContact = useAppStore((s) => s.addEmergencyContact);
+  const deleteEmergencyContact = useAppStore((s) => s.deleteEmergencyContact);
 
   const [showContactModal, setShowContactModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState<string | null>(null);
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    phone: '',
+    relationship: '配偶',
+    priority: 1,
+  });
 
   const sortedContacts = [...emergencyContacts].sort((a, b) => a.priority - b.priority);
+
+  const resetContactForm = () => {
+    setContactForm({ name: '', phone: '', relationship: '配偶', priority: 1 });
+  };
+
+  const handleAddContact = () => {
+    if (!contactForm.name.trim() || !contactForm.phone.trim()) return;
+    addEmergencyContact({
+      name: contactForm.name.trim(),
+      phone: contactForm.phone.trim(),
+      relationship: contactForm.relationship,
+      priority: contactForm.priority,
+      enabled: true,
+    });
+    resetContactForm();
+    setShowContactModal(false);
+  };
+
+  const handleDeleteContact = (id: string) => {
+    deleteEmergencyContact(id);
+  };
 
   return (
     <div className="space-y-6">
@@ -141,7 +170,10 @@ export default function Authorization() {
                         )}
                       />
                     </button>
-                    <button className="w-9 h-9 rounded-xl hover:bg-coral-50 flex items-center justify-center text-coral-400 hover:text-coral-500 transition-colors">
+                    <button
+                      onClick={() => handleDeleteContact(contact.id)}
+                      className="w-9 h-9 rounded-xl hover:bg-coral-50 flex items-center justify-center text-coral-400 hover:text-coral-500 transition-colors"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -346,13 +378,19 @@ export default function Authorization() {
                 <label className="text-sm font-medium text-slate-700 mb-2 block">姓名</label>
                 <input
                   type="text"
+                  value={contactForm.name}
+                  onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })}
                   placeholder="请输入联系人姓名"
                   className="w-full px-4 py-3 rounded-xl bg-cream-100 border border-transparent focus:border-coral-200 focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
               <div>
                 <label className="text-sm font-medium text-slate-700 mb-2 block">关系</label>
-                <select className="w-full px-4 py-3 rounded-xl bg-cream-100 border border-transparent focus:border-coral-200 focus:bg-white focus:outline-none transition-all placeholder:text-slate-400">
+                <select
+                  value={contactForm.relationship}
+                  onChange={(e) => setContactForm({ ...contactForm, relationship: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-cream-100 border border-transparent focus:border-coral-200 focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
+                >
                   <option>配偶</option>
                   <option>儿子</option>
                   <option>女儿</option>
@@ -364,6 +402,8 @@ export default function Authorization() {
                 <label className="text-sm font-medium text-slate-700 mb-2 block">手机号码</label>
                 <input
                   type="tel"
+                  value={contactForm.phone}
+                  onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })}
                   placeholder="请输入手机号码"
                   className="w-full px-4 py-3 rounded-xl bg-cream-100 border border-transparent focus:border-coral-200 focus:bg-white focus:outline-none transition-all placeholder:text-slate-400"
                 />
@@ -374,7 +414,14 @@ export default function Authorization() {
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
                       key={n}
-                      className="flex-1 py-3 rounded-xl border-2 border-slate-200 hover:border-coral-300 font-medium transition-all relative"
+                      type="button"
+                      onClick={() => setContactForm({ ...contactForm, priority: n })}
+                      className={cn(
+                        'flex-1 py-3 rounded-xl border-2 font-medium transition-all relative',
+                        contactForm.priority === n
+                          ? 'border-coral-400 bg-coral-50 text-coral-600'
+                          : 'border-slate-200 hover:border-coral-300 text-slate-600'
+                      )}
                     >
                       <Star className="w-4 h-4 inline mr-1 text-sun-400 fill-sun-400" />
                       {n}
@@ -386,14 +433,21 @@ export default function Authorization() {
 
             <div className="flex gap-3 mt-6">
               <button
-                onClick={() => setShowContactModal(false)}
+                onClick={() => {
+                  resetContactForm();
+                  setShowContactModal(false);
+                }}
                 className="flex-1 btn-secondary"
               >
                 取消
               </button>
               <button
-                onClick={() => setShowContactModal(false)}
-                className="flex-1 btn-primary"
+                onClick={handleAddContact}
+                disabled={!contactForm.name.trim() || !contactForm.phone.trim()}
+                className={cn(
+                  'flex-1 btn-primary',
+                  (!contactForm.name.trim() || !contactForm.phone.trim()) && 'opacity-50 cursor-not-allowed'
+                )}
               >
                 确认添加
               </button>

@@ -16,6 +16,8 @@ import {
   X,
   Tag,
   User,
+  Star,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
@@ -78,8 +80,25 @@ export default function ServiceBooking() {
   const [selectedDuration, setSelectedDuration] = useState<number>(2);
   const [bookingFilter, setBookingFilter] = useState<string>('all');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [ratingModal, setRatingModal] = useState<{ show: boolean; bookingId: string | null }>({ show: false, bookingId: null });
+  const [ratingValue, setRatingValue] = useState(5);
+  const [detailModal, setDetailModal] = useState<{ show: boolean; bookingId: string | null }>({ show: false, bookingId: null });
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const rateBooking = useAppStore((s) => s.rateBooking);
+
+  const handleRate = () => {
+    if (ratingModal.bookingId) {
+      rateBooking(ratingModal.bookingId, ratingValue);
+    }
+    setRatingModal({ show: false, bookingId: null });
+    setRatingValue(5);
+  };
+
+  const currentDetailBooking = detailModal.bookingId
+    ? serviceBookings.find((b) => b.id === detailModal.bookingId)
+    : null;
 
   const generateCalendarDays = () => {
     const year = currentMonth.getFullYear();
@@ -105,6 +124,9 @@ export default function ServiceBooking() {
     if (!selectedService || !selectedDate || !selectedTime) return;
 
     const total = selectedService.pricePerHour * selectedDuration;
+    const disc = total >= 500 ? total * 0.1 : 0;
+    const actualPay = total - disc;
+
     addBooking({
       serviceId: selectedService.id,
       serviceName: selectedService.name,
@@ -112,6 +134,7 @@ export default function ServiceBooking() {
       scheduledTime: selectedTime,
       duration: selectedDuration,
       totalAmount: total,
+      actualPayAmount: actualPay,
       status: 'confirmed',
     });
 
@@ -464,6 +487,8 @@ export default function ServiceBooking() {
                 key={booking.id}
                 booking={booking}
                 onCancel={() => cancelBooking(booking.id)}
+                onRate={() => setRatingModal({ show: true, bookingId: booking.id })}
+                onViewDetail={() => setDetailModal({ show: true, bookingId: booking.id })}
               />
             ))}
             {filteredBookings.length === 0 && (
@@ -475,11 +500,207 @@ export default function ServiceBooking() {
           </div>
         </>
       )}
+
+      {ratingModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <Card className="max-w-md w-full animate-fade-in-up">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-slate-800">服务评价</h3>
+                <p className="text-sm text-slate-500 mt-1">您的评价能帮助我们改进服务</p>
+              </div>
+              <button
+                onClick={() => setRatingModal({ show: false, bookingId: null })}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="text-center py-6">
+              <p className="text-sm text-slate-500 mb-3">请为本次服务打分</p>
+              <div className="flex justify-center gap-2 mb-3">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setRatingValue(s)}
+                    className="transition-all hover:scale-125"
+                  >
+                    <Star
+                      className={cn(
+                        'w-12 h-12',
+                        s <= ratingValue
+                          ? 'text-sun-400'
+                          : 'text-slate-200'
+                      )}
+                      fill={s <= ratingValue ? 'currentColor' : 'none'}
+                      strokeWidth={2}
+                    />
+                  </button>
+                ))}
+              </div>
+              <p className="text-sm font-medium text-slate-700">
+                {ratingValue === 5 ? '非常满意 😊' :
+                 ratingValue === 4 ? '比较满意 🙂' :
+                 ratingValue === 3 ? '一般 😐' :
+                 ratingValue === 2 ? '不太满意 🙁' :
+                 '非常不满意 😞'}
+              </p>
+            </div>
+
+            <textarea
+              placeholder="请输入您的评价内容（选填）..."
+              className="w-full p-4 rounded-xl bg-cream-100 border border-transparent focus:border-coral-200 focus:bg-white focus:outline-none transition-all text-sm placeholder:text-slate-400 resize-none h-24 mb-5"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setRatingModal({ show: false, bookingId: null })}
+                className="flex-1 btn-secondary"
+              >
+                稍后再说
+              </button>
+              <button
+                onClick={handleRate}
+                className="flex-1 btn-primary"
+              >
+                提交评价
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {detailModal.show && currentDetailBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <Card className="max-w-lg w-full animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <h3 className="font-serif text-xl font-bold text-slate-800">服务详情</h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-sm text-slate-500">{currentDetailBooking.serviceName}</span>
+                  <StatusBadge
+                    label={getBookingStatusLabel(currentDetailBooking.status)}
+                    variant={
+                      currentDetailBooking.status === 'completed'
+                        ? 'success'
+                        : currentDetailBooking.status === 'cancelled'
+                        ? 'neutral'
+                        : currentDetailBooking.status === 'in_progress'
+                        ? 'info'
+                        : 'warning'
+                    }
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailModal({ show: false, bookingId: null })}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-cream-50">
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">预约日期</p>
+                  <p className="font-medium text-slate-800">{currentDetailBooking.scheduledDate}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">服务时间</p>
+                  <p className="font-medium text-slate-800">{currentDetailBooking.scheduledTime} · {currentDetailBooking.duration}小时</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">照护人员</p>
+                  <p className="font-medium text-slate-800">{currentDetailBooking.caregiverName || '待指派'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 mb-1">服务费用</p>
+                  <p className="font-bold text-coral-500 font-serif text-lg">{formatMoney(currentDetailBooking.totalAmount)}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4" />
+                  服务现场照片
+                </p>
+                {currentDetailBooking.photos && currentDetailBooking.photos.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {currentDetailBooking.photos.map((photo, idx) => (
+                      <div
+                        key={idx}
+                        className="aspect-square rounded-xl bg-gradient-to-br from-teal-100 via-indigo-100 to-coral-100 flex items-center justify-center overflow-hidden relative group cursor-pointer"
+                      >
+                        <img
+                          src={photo}
+                          alt={`服务照片${idx + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <ImageIcon className="w-8 h-8 text-white/60 hidden" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 rounded-xl bg-cream-50 text-center text-slate-400 text-sm">
+                    <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    暂无服务照片
+                  </div>
+                )}
+              </div>
+
+              {currentDetailBooking.rating && (
+                <div className="p-4 rounded-xl bg-sun-50 border border-sun-100">
+                  <p className="text-sm font-medium text-slate-700 mb-2">您的评价</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={cn('w-5 h-5', s <= currentDetailBooking.rating! ? 'text-sun-400' : 'text-slate-200')}
+                          fill={s <= currentDetailBooking.rating! ? 'currentColor' : 'none'}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-slate-600">
+                      {currentDetailBooking.rating} 星
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setDetailModal({ show: false, bookingId: null })}
+                className="flex-1 btn-primary"
+              >
+                我知道了
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
 
-function BookingCard({ booking, onCancel }: { booking: ServiceBookingRecord; onCancel: () => void }) {
+function BookingCard({
+  booking,
+  onCancel,
+  onRate,
+  onViewDetail,
+}: {
+  booking: ServiceBookingRecord;
+  onCancel: () => void;
+  onRate: () => void;
+  onViewDetail: () => void;
+}) {
   const canCancel = booking.status === 'pending' || booking.status === 'confirmed';
 
   return (
@@ -529,7 +750,7 @@ function BookingCard({ booking, onCancel }: { booking: ServiceBookingRecord; onC
                 {[1, 2, 3, 4, 5].map((s) => (
                   <span
                     key={s}
-                    className={s <= (booking.rating || 0) ? 'text-sun-400' : 'text-slate-200'}
+                    className={cn('text-lg', s <= (booking.rating || 0) ? 'text-sun-400' : 'text-slate-200')}
                   >
                     ★
                   </span>
@@ -541,15 +762,20 @@ function BookingCard({ booking, onCancel }: { booking: ServiceBookingRecord; onC
 
         <div className="flex md:flex-col gap-2 shrink-0">
           {booking.status === 'completed' && !booking.rating && (
-            <button className="px-5 py-2.5 rounded-xl bg-coral-500 text-white text-sm font-medium hover:bg-coral-600 transition-colors">
+            <button
+              onClick={onRate}
+              className="px-5 py-2.5 rounded-xl bg-coral-500 text-white text-sm font-medium hover:bg-coral-600 transition-colors flex items-center gap-1.5"
+            >
+              <Star className="w-4 h-4" />
               去评价
             </button>
           )}
-          {(booking.status === 'completed' || booking.status === 'in_progress') && (
-            <button className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:border-coral-200 hover:text-coral-600 transition-colors">
-              查看详情
-            </button>
-          )}
+          <button
+            onClick={onViewDetail}
+            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:border-coral-200 hover:text-coral-600 transition-colors"
+          >
+            查看详情
+          </button>
           {canCancel && (
             <button
               onClick={onCancel}

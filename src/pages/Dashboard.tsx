@@ -25,13 +25,13 @@ import { Link } from 'react-router-dom';
 import type { HealthMetric } from '../types';
 
 export default function Dashboard() {
-  const elderInfo = useAppStore.getState().elderInfo;
-  const healthMetrics = useAppStore.getState().healthMetrics;
-  const medicationRecords = useAppStore.getState().medicationRecords;
-  const visitRecords = useAppStore.getState().visitRecords;
-  const notifications = useAppStore.getState().notifications;
-  const toggleMedication = useAppStore.getState().toggleMedication;
-  const unreadCount = useAppStore.getState().unreadCount;
+  const elderInfo = useAppStore((s) => s.elderInfo);
+  const healthMetrics = useAppStore((s) => s.healthMetrics);
+  const medicationRecords = useAppStore((s) => s.medicationRecords);
+  const visitRecords = useAppStore((s) => s.visitRecords);
+  const notifications = useAppStore((s) => s.notifications);
+  const toggleMedication = useAppStore((s) => s.toggleMedication);
+  const unreadCount = useAppStore((s) => s.unreadCount);
 
   const latestMetrics = {
     bloodPressure: healthMetrics.filter((m) => m.type === 'blood_pressure').slice(-1)[0],
