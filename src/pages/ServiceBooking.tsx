@@ -23,6 +23,9 @@ import {
   Camera,
   FileText,
   CircleDot,
+  Car,
+  RefreshCcw,
+  Receipt,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
@@ -634,47 +637,61 @@ export default function ServiceBooking() {
                 <div className="relative pl-5">
                   <div className="absolute left-2 top-2 bottom-2 w-0.5 bg-slate-100" />
                   {(() => {
-                    const statusOrder: { key: string; label: string; icon: any; time?: string }[] = [];
+                    type TimelineNode = {
+                      key: string;
+                      label: string;
+                      icon: any;
+                      time?: string;
+                      nodeType: 'completed' | 'current' | 'future' | 'cancelled' | 'refund';
+                    };
+
+                    const nodes: TimelineNode[] = [];
                     const s = currentDetailBooking.status;
                     const dateStr = currentDetailBooking.scheduledDate;
                     const timeStr = currentDetailBooking.scheduledTime;
-
-                    statusOrder.push({ key: 'created', label: '预约提交', icon: FileText, time: `${dateStr} ${timeStr}` });
-
-                    if (s !== 'pending' && s !== 'cancelled') {
-                      statusOrder.push({ key: 'confirmed', label: '预约确认', icon: Check, time: `${dateStr} ${timeStr}` });
-                    }
+                    const endTime = (() => {
+                      const [h, m] = timeStr.split(':').map(Number);
+                      const endH = h + currentDetailBooking.duration;
+                      return `${String(Math.floor(endH)).padStart(2, '0')}:${m}`;
+                    })();
 
                     if (s === 'pending') {
-                      statusOrder.push({ key: 'pending', label: '等待确认', icon: Clock });
+                      nodes.push({ key: 'created', label: '预约提交', icon: FileText, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'pending', label: '等待确认', icon: Clock, nodeType: 'current' });
+                    } else if (s === 'confirmed') {
+                      nodes.push({ key: 'created', label: '预约提交', icon: FileText, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'confirmed', label: '预约确认', icon: Check, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'waiting_departure', label: '等待出发', icon: Clock, nodeType: 'current' });
                     } else if (s === 'in_progress') {
-                      statusOrder.push({ key: 'arrived', label: '照护人员到达', icon: MapPin, time: `${dateStr} ${timeStr}` });
-                      statusOrder.push({ key: 'ongoing', label: '服务进行中', icon: Play });
+                      nodes.push({ key: 'created', label: '预约提交', icon: FileText, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'confirmed', label: '预约确认', icon: Check, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'departed', label: '已出发', icon: Car, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'arrived', label: '已到达', icon: MapPin, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'ongoing', label: '服务进行中', icon: Play, nodeType: 'current' });
                     } else if (s === 'completed') {
-                      const endTime = (() => {
-                        const [h, m] = timeStr.split(':').map(Number);
-                        const endH = h + currentDetailBooking.duration;
-                        return `${String(Math.floor(endH)).padStart(2, '0')}:${m}`;
-                      })();
-                      statusOrder.push({ key: 'arrived', label: '照护人员到达', icon: MapPin, time: `${dateStr} ${timeStr}` });
-                      statusOrder.push({ key: 'started', label: '开始服务', icon: Play, time: `${dateStr} ${timeStr}` });
-                      statusOrder.push({ key: 'completed', label: '服务完成', icon: Check, time: `${dateStr} ${endTime}` });
+                      nodes.push({ key: 'created', label: '预约提交', icon: FileText, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'confirmed', label: '预约确认', icon: Check, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'departed', label: '已出发', icon: Car, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'arrived', label: '已到达', icon: MapPin, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'started', label: '开始服务', icon: Play, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      nodes.push({ key: 'completed', label: '服务完成', icon: Check, time: `${dateStr} ${endTime}`, nodeType: 'completed' });
                       if (currentDetailBooking.photos && currentDetailBooking.photos.length > 0) {
-                        statusOrder.push({ key: 'photos', label: '照片回传', icon: Camera, time: `${dateStr} ${endTime}` });
+                        nodes.push({ key: 'photos', label: '照片回传', icon: Camera, time: `${dateStr} ${endTime}`, nodeType: 'completed' });
                       }
                       if (currentDetailBooking.rating) {
-                        statusOrder.push({ key: 'rated', label: '已评价', icon: Star, time: `${dateStr} ${endTime}` });
+                        nodes.push({ key: 'rated', label: '已评价', icon: Star, time: `${dateStr} ${endTime}`, nodeType: 'completed' });
                       }
                     } else if (s === 'cancelled') {
-                      statusOrder.push({ key: 'cancelled', label: '已取消', icon: X });
+                      nodes.push({ key: 'created', label: '预约提交', icon: FileText, time: `${dateStr} ${timeStr}`, nodeType: 'completed' });
+                      if (currentDetailBooking.status === 'cancelled') {
+                        nodes.push({ key: 'cancelled', label: '已取消', icon: X, nodeType: 'cancelled' });
+                      }
+                      if (currentDetailBooking.refundTransactionId) {
+                        nodes.push({ key: 'refunded', label: '已退款', icon: RefreshCcw, nodeType: 'refund' });
+                      }
                     }
 
-                    const currentIdx = statusOrder.length - 1;
-
-                    return statusOrder.map((node, idx) => {
-                      const isCompleted = idx < currentIdx || (s === 'completed' && idx === currentIdx && node.key !== 'ongoing');
-                      const isCurrent = idx === currentIdx && s !== 'completed' && s !== 'cancelled';
-                      const isCancelled = node.key === 'cancelled';
+                    return nodes.map((node) => {
                       const Icon = node.icon;
 
                       return (
@@ -682,10 +699,11 @@ export default function ServiceBooking() {
                           <div
                             className={cn(
                               'absolute -left-5 w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all',
-                              isCompleted && !isCancelled && 'bg-teal-500 border-teal-500 text-white',
-                              isCurrent && 'bg-coral-500 border-coral-500 text-white animate-pulse-soft',
-                              !isCompleted && !isCurrent && !isCancelled && 'bg-white border-slate-200 text-slate-300',
-                              isCancelled && 'bg-slate-400 border-slate-400 text-white'
+                              node.nodeType === 'completed' && 'bg-teal-500 border-teal-500 text-white',
+                              node.nodeType === 'current' && 'bg-coral-500 border-coral-500 text-white animate-pulse-soft',
+                              node.nodeType === 'future' && 'bg-white border-slate-200 text-slate-300',
+                              node.nodeType === 'cancelled' && 'bg-red-500 border-red-500 text-white',
+                              node.nodeType === 'refund' && 'bg-slate-400 border-slate-400 text-white'
                             )}
                           >
                             <Icon className="w-2.5 h-2.5" strokeWidth={3} />
@@ -694,10 +712,11 @@ export default function ServiceBooking() {
                             <div className="flex items-center justify-between">
                               <p className={cn(
                                 'text-sm font-medium',
-                                isCompleted && !isCancelled && 'text-slate-700',
-                                isCurrent && 'text-coral-600',
-                                !isCompleted && !isCurrent && !isCancelled && 'text-slate-400',
-                                isCancelled && 'text-slate-500'
+                                node.nodeType === 'completed' && 'text-slate-700',
+                                node.nodeType === 'current' && 'text-coral-600',
+                                node.nodeType === 'future' && 'text-slate-400',
+                                node.nodeType === 'cancelled' && 'text-red-600',
+                                node.nodeType === 'refund' && 'text-slate-500'
                               )}>
                                 {node.label}
                               </p>
@@ -763,6 +782,41 @@ export default function ServiceBooking() {
                       {currentDetailBooking.rating} 星
                     </span>
                   </div>
+                </div>
+              )}
+
+              {currentDetailBooking.transactionId && (
+                <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Receipt className="w-4 h-4 text-indigo-600" />
+                    <p className="text-sm font-medium text-indigo-700">账单扣费流水</p>
+                  </div>
+                  <div className="space-y-2 text-sm mb-4">
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">原价</span>
+                      <span className="font-medium text-slate-700">
+                        {formatMoney(currentDetailBooking.originalAmount ?? currentDetailBooking.totalAmount)}
+                      </span>
+                    </div>
+                    {currentDetailBooking.discountAmount && currentDetailBooking.discountAmount > 0 && (
+                      <div className="flex justify-between text-teal-600">
+                        <span>优惠</span>
+                        <span className="font-medium">-{formatMoney(currentDetailBooking.discountAmount)}</span>
+                      </div>
+                    )}
+                    <div className="pt-2 border-t border-indigo-100">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-slate-600">实付</span>
+                        <span className="text-lg font-bold text-indigo-700 font-serif">
+                          {formatMoney(currentDetailBooking.totalAmount)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="w-full py-2.5 rounded-lg bg-white border border-indigo-200 text-indigo-600 text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1.5">
+                    <Receipt className="w-4 h-4" />
+                    查看账单记录
+                  </button>
                 </div>
               )}
             </div>

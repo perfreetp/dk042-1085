@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Wallet,
   ArrowUpRight,
@@ -11,6 +11,14 @@ import {
   Search,
   X,
   Check,
+  Receipt,
+  CalendarRange,
+  Filter,
+  Calendar,
+  Clock,
+  User,
+  Timer,
+  Tag,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
@@ -42,6 +50,7 @@ const rechargeGifts: Record<number, number> = {
 
 export default function Billing() {
   const transactions = useAppStore((s) => s.transactions);
+  const serviceBookings = useAppStore((s) => s.serviceBookings);
   const accountBalance = useAppStore((s) => s.accountBalance);
   const totalRecharge = useAppStore((s) => s.totalRecharge);
   const totalConsume = useAppStore((s) => s.totalConsume);
@@ -53,10 +62,57 @@ export default function Billing() {
   const [customAmount, setCustomAmount] = useState<string>('');
   const [payMethod, setPayMethod] = useState('wechat');
   const [detailModal, setDetailModal] = useState<string | null>(null);
+  const [filterService, setFilterService] = useState<string>('');
+  const [filterDateStart, setFilterDateStart] = useState<string>('');
+  const [filterDateEnd, setFilterDateEnd] = useState<string>('');
+  const [filterMinAmount, setFilterMinAmount] = useState<string>('');
+  const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
+  const [searchKeyword, setSearchKeyword] = useState<string>('');
 
-  const filtered = transactions.filter(
-    (t) => activeFilter === 'all' || t.type === activeFilter
-  );
+  const uniqueServiceNames = useMemo(() => {
+    const names = new Set(serviceBookings.map((b) => b.serviceName));
+    return Array.from(names);
+  }, [serviceBookings]);
+
+  const filtered = transactions.filter((t) => {
+    if (activeFilter !== 'all' && t.type !== activeFilter) return false;
+    if (searchKeyword && t.orderNo && !t.orderNo.includes(searchKeyword)) return false;
+    if (t.type === 'deduct') {
+      if (filterService) {
+        const booking = serviceBookings.find((b) => b.id === t.bookingId);
+        if (!booking || booking.serviceName !== filterService) return false;
+      }
+      if (filterDateStart) {
+        const txDate = new Date(t.createdAt);
+        const startDate = new Date(filterDateStart);
+        if (txDate < startDate) return false;
+      }
+      if (filterDateEnd) {
+        const txDate = new Date(t.createdAt);
+        const endDate = new Date(filterDateEnd);
+        endDate.setHours(23, 59, 59, 999);
+        if (txDate > endDate) return false;
+      }
+      if (filterMinAmount) {
+        const min = parseFloat(filterMinAmount);
+        if (!isNaN(min) && t.amount < min) return false;
+      }
+      if (filterMaxAmount) {
+        const max = parseFloat(filterMaxAmount);
+        if (!isNaN(max) && t.amount > max) return false;
+      }
+    }
+    return true;
+  });
+
+  const resetFilters = () => {
+    setFilterService('');
+    setFilterDateStart('');
+    setFilterDateEnd('');
+    setFilterMinAmount('');
+    setFilterMaxAmount('');
+    setSearchKeyword('');
+  };
 
   const countByType = {
     all: transactions.length,
@@ -158,7 +214,7 @@ export default function Billing() {
       </div>
 
       <Card>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div className="inline-flex p-1 rounded-xl bg-slate-100 w-fit">
             {typeFilters.map((f) => (
               <button
@@ -189,9 +245,90 @@ export default function Billing() {
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
+              value={searchKeyword}
+              onChange={(e) => setSearchKeyword(e.target.value)}
               placeholder="搜索订单号..."
               className="w-56 pl-10 pr-4 py-2.5 rounded-xl bg-cream-100 border border-transparent focus:border-coral-200 focus:bg-white focus:outline-none transition-all text-sm placeholder:text-slate-400"
             />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-3 mb-5 p-4 rounded-xl bg-cream-50 border border-cream-100">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-medium text-slate-600">核对视图筛选：</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 flex-1">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">服务名称</label>
+              <select
+                value={filterService}
+                onChange={(e) => setFilterService(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-white border border-slate-200 focus:border-coral-300 focus:outline-none text-sm text-slate-700 min-w-[140px]"
+              >
+                <option value="">全部服务</option>
+                {uniqueServiceNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">预约日期</label>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="date"
+                    value={filterDateStart}
+                    onChange={(e) => setFilterDateStart(e.target.value)}
+                    className="pl-8 pr-3 py-2 rounded-lg bg-white border border-slate-200 focus:border-coral-300 focus:outline-none text-sm text-slate-700"
+                  />
+                </div>
+                <span className="text-slate-400">至</span>
+                <div className="relative">
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="date"
+                    value={filterDateEnd}
+                    onChange={(e) => setFilterDateEnd(e.target.value)}
+                    className="pl-8 pr-3 py-2 rounded-lg bg-white border border-slate-200 focus:border-coral-300 focus:outline-none text-sm text-slate-700"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">金额区间</label>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">¥</span>
+                  <input
+                    type="number"
+                    value={filterMinAmount}
+                    onChange={(e) => setFilterMinAmount(e.target.value)}
+                    placeholder="最小"
+                    className="pl-7 pr-3 py-2 rounded-lg bg-white border border-slate-200 focus:border-coral-300 focus:outline-none text-sm text-slate-700 w-24 placeholder:text-slate-400"
+                  />
+                </div>
+                <span className="text-slate-400">-</span>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">¥</span>
+                  <input
+                    type="number"
+                    value={filterMaxAmount}
+                    onChange={(e) => setFilterMaxAmount(e.target.value)}
+                    placeholder="最大"
+                    className="pl-7 pr-3 py-2 rounded-lg bg-white border border-slate-200 focus:border-coral-300 focus:outline-none text-sm text-slate-700 w-24 placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={resetFilters}
+              className="px-4 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-sm text-slate-600 flex items-center gap-1.5 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              重置筛选
+            </button>
           </div>
         </div>
 
@@ -398,64 +535,278 @@ export default function Billing() {
         </div>
       )}
 
-      {currentDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <Card className="max-w-md w-full animate-fade-in-up">
-            <div className="flex items-start justify-between mb-6">
-              <h3 className="font-serif text-xl font-bold text-slate-800">交易详情</h3>
-              <button
-                onClick={() => setDetailModal(null)}
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {currentDetail && (() => {
+        const booking = currentDetail.bookingId
+          ? serviceBookings.find((b) => b.id === currentDetail.bookingId)
+          : null;
+        const presetGift = rechargeGifts[currentDetail.amount] || 0;
+        const style = getTransactionStyle(currentDetail.type);
+        const Icon =
+          currentDetail.type === 'recharge'
+            ? ArrowUpRight
+            : currentDetail.type === 'deduct'
+            ? ArrowDownLeft
+            : RefreshCcw;
 
-            <div className="space-y-4">
-              {[
-                { label: '交易类型', value: getTransactionStyle(currentDetail.type).label },
-                { label: '交易金额', value: (currentDetail.type === 'recharge' || currentDetail.type === 'refund' ? '+' : '-') + formatMoney(currentDetail.amount), highlight: true },
-                { label: '当前余额', value: formatMoney(currentDetail.balanceAfter) },
-                { label: '交易说明', value: currentDetail.description },
-                { label: '订单编号', value: currentDetail.orderNo || '-' },
-                { label: '支付方式', value: currentDetail.paymentMethod === 'wechat' ? '微信支付' : currentDetail.paymentMethod === 'alipay' ? '支付宝' : currentDetail.paymentMethod === 'bank' ? '银行卡' : '-' },
-                { label: '交易状态', value: '交易成功' },
-                { label: '交易时间', value: formatDate(currentDetail.createdAt) },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  className={`flex justify-between items-center pb-4 ${
-                    i < 7 ? 'border-b border-slate-50' : ''
-                  }`}
-                >
-                  <span className="text-sm text-slate-500">{item.label}</span>
-                  <span
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <Card className="max-w-md w-full animate-fade-in-up max-h-[90vh] overflow-y-auto">
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div
                     className={cn(
-                      'text-sm font-medium',
-                      item.highlight && 'text-xl text-coral-500 font-bold font-serif'
+                      'w-11 h-11 rounded-xl flex items-center justify-center',
+                      style.bgColor
                     )}
                   >
-                    {item.value}
-                  </span>
+                    <Icon className={cn('w-5 h-5', style.color)} />
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-xl font-bold text-slate-800">交易详情</h3>
+                    <p className="text-sm text-slate-500 mt-0.5">{style.label}</p>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <button
+                  onClick={() => setDetailModal(null)}
+                  className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
 
-            <div className="flex gap-3 mt-6">
-              <button className="flex-1 btn-secondary">
-                <FileText className="w-4 h-4" />
-                下载凭证
-              </button>
-              <button
-                onClick={() => setDetailModal(null)}
-                className="flex-1 btn-primary"
-              >
-                我知道了
-              </button>
-            </div>
-          </Card>
-        </div>
-      )}
+              <div className="space-y-5">
+                {currentDetail.type === 'deduct' && booking && (
+                  <div className="p-4 rounded-xl bg-cream-50 border border-cream-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CalendarRange className="w-4 h-4 text-coral-500" />
+                      <p className="text-sm font-semibold text-slate-700">关联预约</p>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <Tag className="w-3 h-3" />
+                          服务名称
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{booking.serviceName}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <Calendar className="w-3 h-3" />
+                          预约日期
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{formatDate(booking.scheduledDate)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <Clock className="w-3 h-3" />
+                          预约时间
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{booking.scheduledTime}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <User className="w-3 h-3" />
+                          照护人员
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{booking.caregiverName || '-'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <Timer className="w-3 h-3" />
+                          服务时长
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{booking.duration} 小时</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">预约状态</span>
+                        <StatusBadge
+                          label={
+                            booking.status === 'pending' ? '待确认' :
+                            booking.status === 'confirmed' ? '已确认' :
+                            booking.status === 'in_progress' ? '进行中' :
+                            booking.status === 'completed' ? '已完成' :
+                            '已取消'
+                          }
+                          variant={
+                            booking.status === 'completed' ? 'success' :
+                            booking.status === 'cancelled' ? 'error' :
+                            booking.status === 'in_progress' ? 'warning' : 'info'
+                          }
+                          size="sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentDetail.type === 'refund' && booking && (
+                  <div className="p-4 rounded-xl bg-cream-50 border border-cream-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CalendarRange className="w-4 h-4 text-indigo-500" />
+                      <p className="text-sm font-semibold text-slate-700">关联预约</p>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <Tag className="w-3 h-3" />
+                          服务名称
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{booking.serviceName}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <Calendar className="w-3 h-3" />
+                          预约日期
+                        </span>
+                        <span className="text-sm font-medium text-slate-700">{formatDate(booking.scheduledDate)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">预约状态</span>
+                        <StatusBadge label="已取消" variant="error" size="sm" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentDetail.type === 'deduct' && (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Receipt className="w-4 h-4 text-coral-500" />
+                      <p className="text-sm font-semibold text-slate-700">费用构成</p>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">原价</span>
+                        <span className="text-sm font-medium text-slate-700">
+                          {formatMoney(currentDetail.originalAmount ?? currentDetail.amount)}
+                        </span>
+                      </div>
+                      {currentDetail.discountAmount && currentDetail.discountAmount > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-500">优惠金额</span>
+                          <span className="text-sm font-medium text-teal-600">
+                            -{formatMoney(currentDetail.discountAmount)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="pt-2 border-t border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-600 font-medium">实付金额</span>
+                          <span className="text-2xl font-bold text-coral-500 font-serif">
+                            -{formatMoney(currentDetail.amount)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentDetail.type === 'recharge' && (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Receipt className="w-4 h-4 text-teal-500" />
+                      <p className="text-sm font-semibold text-slate-700">充值信息</p>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">支付方式</span>
+                        <span className="text-sm font-medium text-slate-700">
+                          {currentDetail.paymentMethod === 'wechat' ? '微信支付' :
+                           currentDetail.paymentMethod === 'alipay' ? '支付宝' :
+                           currentDetail.paymentMethod === 'bank' ? '银行卡' : '-'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">充值金额</span>
+                        <span className="text-sm font-medium text-slate-700">
+                          {formatMoney(currentDetail.amount)}
+                        </span>
+                      </div>
+                      {presetGift > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-500">赠送金额</span>
+                          <span className="text-sm font-medium text-teal-600">
+                            +{formatMoney(presetGift)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="pt-2 border-t border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-600 font-medium">到账金额</span>
+                          <span className="text-2xl font-bold text-teal-500 font-serif">
+                            +{formatMoney(currentDetail.amount + presetGift)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentDetail.type === 'refund' && (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Receipt className="w-4 h-4 text-indigo-500" />
+                      <p className="text-sm font-semibold text-slate-700">退款信息</p>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-600 font-medium">退款金额</span>
+                          <span className="text-2xl font-bold text-teal-500 font-serif">
+                            +{formatMoney(currentDetail.amount)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="w-4 h-4 text-slate-500" />
+                    <p className="text-sm font-semibold text-slate-700">交易信息</p>
+                  </div>
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-50">
+                      <span className="text-sm text-slate-500">当前余额</span>
+                      <span className="text-sm font-medium text-slate-700">{formatMoney(currentDetail.balanceAfter)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-50">
+                      <span className="text-sm text-slate-500">交易说明</span>
+                      <span className="text-sm font-medium text-slate-700 text-right max-w-[200px]">{currentDetail.description}</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-50">
+                      <span className="text-sm text-slate-500">订单编号</span>
+                      <span className="text-sm font-medium text-slate-700">{currentDetail.orderNo || '-'}</span>
+                    </div>
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-50">
+                      <span className="text-sm text-slate-500">交易状态</span>
+                      <StatusBadge label="交易成功" variant="success" size="sm" />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">交易时间</span>
+                      <span className="text-sm font-medium text-slate-700">{formatDate(currentDetail.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button className="flex-1 btn-secondary">
+                  <FileText className="w-4 h-4" />
+                  下载凭证
+                </button>
+                <button
+                  onClick={() => setDetailModal(null)}
+                  className="flex-1 btn-primary"
+                >
+                  我知道了
+                </button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }

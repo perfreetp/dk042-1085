@@ -66,12 +66,15 @@ export interface ServiceBookingRecord {
   scheduledTime: string;
   duration: number;
   totalAmount: number;
+  originalAmount?: number;
+  discountAmount?: number;
   status: BookingStatus;
   caregiverName?: string;
   createdAt: string;
   photos?: string[];
   rating?: number;
   transactionId?: string;
+  refundTransactionId?: string;
 }
 
 export type NotificationType = 'warning' | 'service' | 'system' | 'photo';
@@ -99,6 +102,8 @@ export interface Transaction {
   status: 'success' | 'pending' | 'failed';
   createdAt: string;
   bookingId?: string;
+  originalAmount?: number;
+  discountAmount?: number;
 }
 
 export interface EmergencyContact {

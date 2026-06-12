@@ -100,26 +100,36 @@ export const useAppStore = create<AppState>()(
       addBooking: (booking) =>
         set((state) => {
           const actualPay = booking.actualPayAmount ?? booking.totalAmount;
+          const originalAmt = booking.totalAmount;
+          const discountAmt = originalAmt - actualPay;
+          const bookingId = `booking-${Date.now()}`;
+          const transactionId = `txn-${Date.now()}`;
           return {
             serviceBookings: [
               {
                 ...booking,
                 totalAmount: actualPay,
-                id: `booking-${Date.now()}`,
+                originalAmount: originalAmt,
+                discountAmount: discountAmt > 0 ? discountAmt : undefined,
+                id: bookingId,
                 createdAt: new Date().toISOString(),
+                transactionId,
               },
               ...state.serviceBookings,
             ],
             transactions: [
               {
-                id: `txn-${Date.now()}`,
+                id: transactionId,
                 type: 'deduct' as const,
                 amount: actualPay,
                 balanceAfter: state.accountBalance - actualPay,
-                description: `服务扣费 - ${booking.serviceName}(${booking.duration}小时)${booking.actualPayAmount !== undefined && booking.actualPayAmount < booking.totalAmount ? '（已享优惠）' : ''}`,
+                description: `服务扣费 - ${booking.serviceName}(${booking.duration}小时)${discountAmt > 0 ? '（已享优惠）' : ''}`,
                 orderNo: `ORD${Date.now()}`,
                 status: 'success' as const,
                 createdAt: new Date().toISOString(),
+                bookingId,
+                originalAmount: originalAmt,
+                discountAmount: discountAmt > 0 ? discountAmt : undefined,
               },
               ...state.transactions,
             ],
@@ -132,13 +142,14 @@ export const useAppStore = create<AppState>()(
         set((state) => {
           const booking = state.serviceBookings.find((b) => b.id === id);
           if (!booking || booking.status === 'cancelled' || booking.status === 'completed') return state;
+          const refundTxnId = `txn-${Date.now()}`;
           return {
             serviceBookings: state.serviceBookings.map((b) =>
-              b.id === id ? { ...b, status: 'cancelled' as const } : b
+              b.id === id ? { ...b, status: 'cancelled' as const, refundTransactionId: refundTxnId } : b
             ),
             transactions: [
               {
-                id: `txn-${Date.now()}`,
+                id: refundTxnId,
                 type: 'refund' as const,
                 amount: booking.totalAmount,
                 balanceAfter: state.accountBalance + booking.totalAmount,
@@ -146,6 +157,7 @@ export const useAppStore = create<AppState>()(
                 orderNo: `REF${Date.now()}`,
                 status: 'success' as const,
                 createdAt: new Date().toISOString(),
+                bookingId: id,
               },
               ...state.transactions,
             ],

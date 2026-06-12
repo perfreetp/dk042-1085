@@ -21,6 +21,7 @@ import {
   formatDate,
   getHealthMetricLabel,
   getHealthMetricColor,
+  cn,
 } from '../utils/formatters';
 import type { HealthMetricType } from '../types';
 
@@ -51,7 +52,9 @@ export default function HealthRecords() {
   );
   const recentMetrics = filteredMetrics.slice(-10).reverse();
   const abnormalMetrics = healthMetrics.filter(
-    (m) => m.status !== 'normal' && now - new Date(m.timestamp).getTime() <= rangeMs
+    (m) => m.status !== 'normal'
+      && m.type === activeMetric
+      && now - new Date(m.timestamp).getTime() <= rangeMs
   ).slice(-8).reverse();
 
   const normalRange = {
