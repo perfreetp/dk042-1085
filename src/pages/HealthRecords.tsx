@@ -5,6 +5,7 @@ import {
   AlertCircle,
   ChevronRight,
   Calendar,
+  CalendarDays,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -12,6 +13,9 @@ import {
   Lightbulb,
   CheckCircle2,
   Info,
+  Eye,
+  List,
+  X,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
@@ -42,6 +46,7 @@ export default function HealthRecords() {
   const healthMetrics = useAppStore((s) => s.healthMetrics);
   const [activeRange, setActiveRange] = useState('30d');
   const [activeMetric, setActiveMetric] = useState<HealthMetricType>('blood_pressure');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const rangeDays = activeRange === '7d' ? 7 : activeRange === '30d' ? 30 : 90;
   const now = Date.now();
@@ -56,6 +61,20 @@ export default function HealthRecords() {
       && m.type === activeMetric
       && now - new Date(m.timestamp).getTime() <= rangeMs
   ).slice(-8).reverse();
+
+  const groupedAbnormals = (() => {
+    const groups: Record<string, typeof abnormalMetrics> = {};
+    for (const m of abnormalMetrics) {
+      const dateKey = new Date(m.timestamp).toISOString().slice(0, 10);
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(m);
+    }
+    return groups;
+  })();
+
+  const dateMeasurements = selectedDate
+    ? healthMetrics.filter((m) => new Date(m.timestamp).toISOString().slice(0, 10) === selectedDate)
+    : [];
 
   const normalRange = {
     blood_pressure: '90-140 / 60-90 mmHg',
@@ -433,46 +452,180 @@ export default function HealthRecords() {
           </div>
 
           <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-            {abnormalMetrics.map((metric) => (
-              <div
-                key={metric.id}
-                className={`p-3 rounded-xl border ${
-                  metric.status === 'high'
-                    ? 'bg-coral-50 border-coral-100'
-                    : 'bg-sun-50 border-sun-100'
-                }`}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <StatusBadge
-                      label={metric.status === 'high' ? '偏高' : '偏低'}
-                      variant={metric.status === 'high' ? 'error' : 'warning'}
-                    />
-                    <span className="font-medium text-slate-700 text-sm">
-                      {getHealthMetricLabel(metric.type)}
+            {Object.entries(groupedAbnormals).map(([dateKey, metrics]) => {
+              const dateObj = new Date(dateKey);
+              const month = dateObj.getMonth() + 1;
+              const day = dateObj.getDate();
+              const count = metrics.length;
+
+              if (count > 1) {
+                const detailParts: string[] = [];
+                const highSystolic = metrics.filter((m) => m.type === 'blood_pressure' && m.value > 140).length;
+                const highDiastolic = metrics.filter((m) => m.type === 'blood_pressure' && (m.value2 || 0) > 90).length;
+                const highBp = metrics.filter((m) => m.type === 'blood_pressure' && m.status === 'high').length;
+                const lowBp = metrics.filter((m) => m.type === 'blood_pressure' && m.status === 'low').length;
+                const highBs = metrics.filter((m) => m.type === 'blood_sugar' && m.status === 'high').length;
+                const lowBs = metrics.filter((m) => m.type === 'blood_sugar' && m.status === 'low').length;
+                const highHr = metrics.filter((m) => m.type === 'heart_rate' && m.status === 'high').length;
+                const lowHr = metrics.filter((m) => m.type === 'heart_rate' && m.status === 'low').length;
+                const highTemp = metrics.filter((m) => m.type === 'temperature' && m.status === 'high').length;
+                const lowTemp = metrics.filter((m) => m.type === 'temperature' && m.status === 'low').length;
+
+                if (highSystolic > 0) detailParts.push(`收缩压偏高${highSystolic}次`);
+                if (highDiastolic > 0) detailParts.push(`舒张压偏高${highDiastolic}次`);
+                if (lowBp > 0 && highSystolic === 0 && highDiastolic === 0) detailParts.push(`血压偏低${lowBp}次`);
+                if (highBs > 0) detailParts.push(`血糖偏高${highBs}次`);
+                if (lowBs > 0) detailParts.push(`血糖偏低${lowBs}次`);
+                if (highHr > 0) detailParts.push(`心率偏高${highHr}次`);
+                if (lowHr > 0) detailParts.push(`心率偏低${lowHr}次`);
+                if (highTemp > 0) detailParts.push(`体温偏高${highTemp}次`);
+                if (lowTemp > 0) detailParts.push(`体温偏低${lowTemp}次`);
+
+                if (detailParts.length === 0) {
+                  detailParts.push(`${getHealthMetricLabel(metrics[0].type)}${metrics[0].status === 'high' ? '偏高' : '偏低'}${count}次`);
+                }
+
+                return (
+                  <div
+                    key={dateKey}
+                    className="p-3 rounded-xl border bg-coral-50 border-coral-200"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-coral-700 text-sm">
+                          {month}月{day}日 共{count}次异常
+                        </p>
+                        <p className="text-xs text-coral-600 mt-1">
+                          （{detailParts.join('、')}）
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSelectedDate(dateKey)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-coral-200 text-coral-600 text-xs font-medium hover:bg-coral-50 transition-colors"
+                      >
+                        <List className="w-3 h-3" />
+                        查看当天
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              const metric = metrics[0];
+              return (
+                <div
+                  key={metric.id}
+                  className={`p-3 rounded-xl border ${
+                    metric.status === 'high'
+                      ? 'bg-coral-50 border-coral-100'
+                      : 'bg-sun-50 border-sun-100'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <StatusBadge
+                        label={metric.status === 'high' ? '偏高' : '偏低'}
+                        variant={metric.status === 'high' ? 'error' : 'warning'}
+                      />
+                      <span className="font-medium text-slate-700 text-sm">
+                        {getHealthMetricLabel(metric.type)}
+                      </span>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      {formatDate(metric.timestamp, 'month')} {formatDate(metric.timestamp, 'time')}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-400">
-                    {formatDate(metric.timestamp, 'month')} {formatDate(metric.timestamp, 'time')}
-                  </span>
+                  <div className="mt-2 flex items-end justify-between">
+                    <p
+                      className={`text-xl font-bold font-serif ${getHealthMetricColor(metric.status)}`}
+                    >
+                      {metric.type === 'blood_pressure'
+                        ? `${metric.value}/${metric.value2} ${metric.unit}`
+                        : `${metric.value} ${metric.unit}`}
+                    </p>
+                    <button
+                      onClick={() => setSelectedDate(new Date(metric.timestamp).toISOString().slice(0, 10))}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-slate-200 text-slate-500 text-xs font-medium hover:border-coral-200 hover:text-coral-600 transition-colors"
+                    >
+                      <Eye className="w-3 h-3" />
+                      查看当天全部测量
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-2 flex items-end justify-between">
-                  <p
-                    className={`text-xl font-bold font-serif ${getHealthMetricColor(metric.status)}`}
-                  >
-                    {metric.type === 'blood_pressure'
-                      ? `${metric.value}/${metric.value2} ${metric.unit}`
-                      : `${metric.value} ${metric.unit}`}
-                  </p>
-                  <Activity className="w-4 h-4 text-slate-400" />
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {abnormalMetrics.length === 0 && (
               <div className="text-center py-10 text-slate-400 text-sm">暂无异常记录</div>
             )}
           </div>
         </Card>
+
+        {selectedDate && (
+          <Card>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center">
+                  <CalendarDays className="w-5 h-5 text-indigo-500" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-semibold text-slate-800">{selectedDate} 测量详情</h3>
+                  <p className="text-xs text-slate-500">当天所有测量记录</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+              {dateMeasurements.map((m) => (
+                <div
+                  key={m.id}
+                  className={`p-3 rounded-xl border ${
+                    m.status === 'normal'
+                      ? 'bg-cream-50 border-cream-100'
+                      : m.status === 'high'
+                      ? 'bg-coral-50 border-coral-100'
+                      : 'bg-sun-50 border-sun-100'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${
+                        m.type === 'blood_pressure' ? 'bg-rose-100 text-rose-700' :
+                        m.type === 'blood_sugar' ? 'bg-violet-100 text-violet-700' :
+                        m.type === 'heart_rate' ? 'bg-pink-100 text-pink-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>
+                        {getHealthMetricLabel(m.type)}
+                      </span>
+                      <StatusBadge
+                        label={m.status === 'normal' ? '正常' : m.status === 'high' ? '偏高' : '偏低'}
+                        variant={m.status === 'normal' ? 'success' : m.status === 'high' ? 'error' : 'warning'}
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      {formatDate(m.timestamp, 'time')}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <p className={`text-xl font-bold font-serif ${getHealthMetricColor(m.status)}`}>
+                      {m.type === 'blood_pressure'
+                        ? `${m.value}/${m.value2} ${m.unit}`
+                        : `${m.value} ${m.unit}`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {dateMeasurements.length === 0 && (
+                <div className="text-center py-8 text-slate-400 text-sm">当天暂无测量记录</div>
+              )}
+            </div>
+          </Card>
+        )}
         </div>
       </div>
 

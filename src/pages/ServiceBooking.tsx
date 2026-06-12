@@ -26,6 +26,7 @@ import {
   Car,
   RefreshCcw,
   Receipt,
+  Eye,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import Card from '../components/common/Card';
@@ -35,9 +36,10 @@ import {
   formatMoney,
   getBookingStatusLabel,
   getBookingStatusStyle,
+  getTransactionStyle,
   cn,
 } from '../utils/formatters';
-import type { ServiceItem, ServiceBookingRecord } from '../types';
+import type { ServiceItem, ServiceBookingRecord, Transaction } from '../types';
 
 const iconMap: Record<string, any> = {
   stethoscope: Stethoscope,
@@ -77,6 +79,7 @@ const durationOptions = [1, 2, 3, 4, 6, 8];
 export default function ServiceBooking() {
   const serviceItems = useAppStore((s) => s.serviceItems);
   const serviceBookings = useAppStore((s) => s.serviceBookings);
+  const transactions = useAppStore((s) => s.transactions);
   const accountBalance = useAppStore((s) => s.accountBalance);
   const addBooking = useAppStore((s) => s.addBooking);
   const cancelBooking = useAppStore((s) => s.cancelBooking);
@@ -91,6 +94,7 @@ export default function ServiceBooking() {
   const [ratingModal, setRatingModal] = useState<{ show: boolean; bookingId: string | null }>({ show: false, bookingId: null });
   const [ratingValue, setRatingValue] = useState(5);
   const [detailModal, setDetailModal] = useState<{ show: boolean; bookingId: string | null }>({ show: false, bookingId: null });
+  const [transactionModal, setTransactionModal] = useState<{ show: boolean; transactionId: string | null }>({ show: false, transactionId: null });
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -789,34 +793,53 @@ export default function ServiceBooking() {
                 <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100">
                   <div className="flex items-center gap-2 mb-3">
                     <Receipt className="w-4 h-4 text-indigo-600" />
-                    <p className="text-sm font-medium text-indigo-700">账单扣费流水</p>
+                    <p className="text-sm font-medium text-indigo-700">费用构成</p>
                   </div>
                   <div className="space-y-2 text-sm mb-4">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">原价</span>
-                      <span className="font-medium text-slate-700">
-                        {formatMoney(currentDetailBooking.originalAmount ?? currentDetailBooking.totalAmount)}
-                      </span>
-                    </div>
-                    {currentDetailBooking.discountAmount && currentDetailBooking.discountAmount > 0 && (
-                      <div className="flex justify-between text-teal-600">
-                        <span>优惠</span>
-                        <span className="font-medium">-{formatMoney(currentDetailBooking.discountAmount)}</span>
+                    {currentDetailBooking.originalAmount && currentDetailBooking.originalAmount !== currentDetailBooking.totalAmount ? (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">原价</span>
+                          <span className="font-medium text-slate-700">{formatMoney(currentDetailBooking.originalAmount)}</span>
+                        </div>
+                        {currentDetailBooking.discountAmount && currentDetailBooking.discountAmount > 0 && (
+                          <div className="flex justify-between text-teal-600">
+                            <span>优惠</span>
+                            <span className="font-medium">-{formatMoney(currentDetailBooking.discountAmount)}</span>
+                          </div>
+                        )}
+                        <div className="pt-2 border-t border-indigo-100">
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-slate-600">实付</span>
+                            <span className="text-lg font-bold text-coral-500 font-serif">{formatMoney(currentDetailBooking.totalAmount)}</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-slate-600">实付金额</span>
+                        <span className="text-lg font-bold text-coral-500 font-serif">{formatMoney(currentDetailBooking.totalAmount)}</span>
                       </div>
                     )}
-                    <div className="pt-2 border-t border-indigo-100">
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-slate-600">实付</span>
-                        <span className="text-lg font-bold text-indigo-700 font-serif">
-                          {formatMoney(currentDetailBooking.totalAmount)}
-                        </span>
-                      </div>
-                    </div>
                   </div>
-                  <button className="w-full py-2.5 rounded-lg bg-white border border-indigo-200 text-indigo-600 text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1.5">
-                    <Receipt className="w-4 h-4" />
-                    查看账单记录
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setTransactionModal({ show: true, transactionId: currentDetailBooking.transactionId! })}
+                      className="flex-1 py-2.5 rounded-lg bg-white border border-indigo-200 text-indigo-600 text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Eye className="w-4 h-4" />
+                      查看扣费流水
+                    </button>
+                    {currentDetailBooking.refundTransactionId && (
+                      <button
+                        onClick={() => setTransactionModal({ show: true, transactionId: currentDetailBooking.refundTransactionId! })}
+                        className="flex-1 py-2.5 rounded-lg bg-white border border-teal-200 text-teal-600 text-sm font-medium hover:bg-teal-50 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <RefreshCcw className="w-4 h-4" />
+                        查看退款流水
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -832,6 +855,90 @@ export default function ServiceBooking() {
           </Card>
         </div>
       )}
+
+      {transactionModal.show && transactionModal.transactionId && (() => {
+        const txn = transactions.find((t) => t.id === transactionModal.transactionId);
+        if (!txn) return null;
+        const style = getTransactionStyle(txn.type);
+        const linkedBooking = txn.bookingId ? serviceBookings.find((b) => b.id === txn.bookingId) : null;
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+            <Card className="max-w-md w-full animate-fade-in-up">
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-slate-800">交易流水详情</h3>
+                  <p className="text-sm text-slate-500 mt-1">{txn.orderNo || txn.id}</p>
+                </div>
+                <button
+                  onClick={() => setTransactionModal({ show: false, transactionId: null })}
+                  className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="text-center py-4">
+                  <p className={`text-3xl font-bold font-serif ${txn.type === 'deduct' ? 'text-rose-600' : 'text-teal-600'}`}>
+                    {txn.type === 'deduct' ? '-' : '+'}{formatMoney(txn.amount)}
+                  </p>
+                  <span className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ${style.color} ${style.bgColor}`}>
+                    {style.label}
+                  </span>
+                </div>
+
+                <div className="space-y-3 p-4 rounded-xl bg-cream-50">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">交易类型</span>
+                    <span className={`font-medium ${style.color}`}>{style.label}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">交易金额</span>
+                    <span className={`font-medium ${txn.type === 'deduct' ? 'text-rose-600' : 'text-teal-600'}`}>
+                      {txn.type === 'deduct' ? '-' : '+'}{formatMoney(txn.amount)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">余额变化</span>
+                    <span className="font-medium text-slate-700">{formatMoney(txn.balanceAfter)}</span>
+                  </div>
+                  {txn.orderNo && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">订单号</span>
+                      <span className="font-medium text-slate-700 text-xs">{txn.orderNo}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">交易说明</span>
+                    <span className="font-medium text-slate-700">{txn.description}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">交易时间</span>
+                    <span className="font-medium text-slate-700">{formatDate(txn.createdAt)}</span>
+                  </div>
+                </div>
+
+                {linkedBooking && (
+                  <button className="w-full py-2.5 rounded-lg bg-white border border-indigo-200 text-indigo-600 text-sm font-medium hover:bg-indigo-50 transition-colors flex items-center justify-center gap-1.5">
+                    <Eye className="w-4 h-4" />
+                    查看预约详情
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-5">
+                <button
+                  onClick={() => setTransactionModal({ show: false, transactionId: null })}
+                  className="w-full btn-primary"
+                >
+                  关闭
+                </button>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }

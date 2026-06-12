@@ -8,6 +8,10 @@ import {
   Plus,
   FileText,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
+  Users,
   Search,
   X,
   Check,
@@ -67,20 +71,39 @@ export default function Billing() {
   const [filterDateEnd, setFilterDateEnd] = useState<string>('');
   const [filterMinAmount, setFilterMinAmount] = useState<string>('');
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
+  const [filterCaregiver, setFilterCaregiver] = useState<string>('');
   const [searchKeyword, setSearchKeyword] = useState<string>('');
+  const [summaryMonth, setSummaryMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [expandedService, setExpandedService] = useState<string | null>(null);
 
   const uniqueServiceNames = useMemo(() => {
     const names = new Set(serviceBookings.map((b) => b.serviceName));
     return Array.from(names);
   }, [serviceBookings]);
 
+  const uniqueCaregiverNames = useMemo(() => {
+    const names = new Set(
+      serviceBookings
+        .map((b) => b.caregiverName)
+        .filter((n): n is string => !!n && n !== '待指派')
+    );
+    return Array.from(names);
+  }, [serviceBookings]);
+
   const filtered = transactions.filter((t) => {
     if (activeFilter !== 'all' && t.type !== activeFilter) return false;
     if (searchKeyword && t.orderNo && !t.orderNo.includes(searchKeyword)) return false;
-    if (t.type === 'deduct') {
+    if (t.type === 'deduct' || t.type === 'refund') {
       if (filterService) {
         const booking = serviceBookings.find((b) => b.id === t.bookingId);
         if (!booking || booking.serviceName !== filterService) return false;
+      }
+      if (filterCaregiver) {
+        const booking = serviceBookings.find((b) => b.id === t.bookingId);
+        if (!booking || booking.caregiverName !== filterCaregiver) return false;
       }
       if (filterDateStart) {
         const txDate = new Date(t.createdAt);
@@ -111,6 +134,7 @@ export default function Billing() {
     setFilterDateEnd('');
     setFilterMinAmount('');
     setFilterMaxAmount('');
+    setFilterCaregiver('');
     setSearchKeyword('');
   };
 
@@ -134,6 +158,70 @@ export default function Billing() {
   const gift = rechargeGifts[finalAmount] || 0;
 
   const currentDetail = detailModal ? transactions.find((t) => t.id === detailModal) : null;
+
+  const monthlySummary = useMemo(() => {
+    const monthTransactions = transactions.filter((t) => {
+      if (t.type !== 'deduct' && t.type !== 'refund') return false;
+      const txDate = new Date(t.createdAt);
+      const monthStr = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+      return monthStr === summaryMonth;
+    });
+
+    const serviceMap = new Map<string, {
+      serviceName: string;
+      deducts: typeof transactions;
+      refunds: typeof transactions;
+    }>();
+
+    monthTransactions.forEach((tx) => {
+      const booking = tx.bookingId ? serviceBookings.find((b) => b.id === tx.bookingId) : null;
+      const serviceName = booking?.serviceName || '其他';
+      if (!serviceMap.has(serviceName)) {
+        serviceMap.set(serviceName, { serviceName, deducts: [], refunds: [] });
+      }
+      const entry = serviceMap.get(serviceName)!;
+      if (tx.type === 'deduct') entry.deducts.push(tx);
+      else entry.refunds.push(tx);
+    });
+
+    const rows = Array.from(serviceMap.values()).map((entry) => {
+      const originalTotal = entry.deducts.reduce((s, t) => s + (t.originalAmount ?? t.amount), 0);
+      const discountTotal = entry.deducts.reduce((s, t) => s + (t.discountAmount ?? 0), 0);
+      const deductTotal = entry.deducts.reduce((s, t) => s + t.amount, 0);
+      const refundTotal = entry.refunds.reduce((s, t) => s + t.amount, 0);
+      return {
+        serviceName: entry.serviceName,
+        originalTotal,
+        discountTotal,
+        deductTotal,
+        refundTotal,
+        netConsume: deductTotal - refundTotal,
+        deducts: entry.deducts,
+        refunds: entry.refunds,
+      };
+    });
+
+    const totals = {
+      originalTotal: rows.reduce((s, r) => s + r.originalTotal, 0),
+      discountTotal: rows.reduce((s, r) => s + r.discountTotal, 0),
+      deductTotal: rows.reduce((s, r) => s + r.deductTotal, 0),
+      refundTotal: rows.reduce((s, r) => s + r.refundTotal, 0),
+      netConsume: rows.reduce((s, r) => s + r.netConsume, 0),
+    };
+
+    return { rows, totals };
+  }, [transactions, serviceBookings, summaryMonth]);
+
+  const summaryMonthLabel = useMemo(() => {
+    const [y, m] = summaryMonth.split('-');
+    return `${y}年${parseInt(m)}月`;
+  }, [summaryMonth]);
+
+  const changeSummaryMonth = (delta: number) => {
+    const [y, m] = summaryMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setSummaryMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -214,6 +302,103 @@ export default function Billing() {
       </div>
 
       <Card>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-serif text-lg font-bold text-slate-800">月度对账汇总</h3>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => changeSummaryMonth(-1)}
+              className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold text-slate-700 min-w-[80px] text-center">{summaryMonthLabel}</span>
+            <button
+              onClick={() => changeSummaryMonth(1)}
+              className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200">
+                <th className="text-left py-3 px-2 text-slate-500 font-medium">服务类型</th>
+                <th className="text-right py-3 px-2 text-slate-500 font-medium">应扣金额</th>
+                <th className="text-right py-3 px-2 text-slate-500 font-medium">优惠金额</th>
+                <th className="text-right py-3 px-2 text-slate-500 font-medium">实扣金额</th>
+                <th className="text-right py-3 px-2 text-slate-500 font-medium">退款金额</th>
+                <th className="text-right py-3 px-2 text-slate-500 font-medium">净消费</th>
+              </tr>
+            </thead>
+            <tbody>
+              {monthlySummary.rows.map((row) => (
+                <tr key={row.serviceName} className="border-b border-slate-100">
+                  <td className="py-3 px-2">
+                    <button
+                      onClick={() => setExpandedService(expandedService === row.serviceName ? null : row.serviceName)}
+                      className="flex items-center gap-1.5 text-slate-700 font-medium hover:text-coral-600 transition-colors"
+                    >
+                      {expandedService === row.serviceName ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      {row.serviceName}
+                    </button>
+                  </td>
+                  <td className="text-right py-3 px-2 text-slate-600">{formatMoney(row.originalTotal)}</td>
+                  <td className="text-right py-3 px-2 text-teal-600">-{formatMoney(row.discountTotal)}</td>
+                  <td className="text-right py-3 px-2 text-coral-600">{formatMoney(row.deductTotal)}</td>
+                  <td className="text-right py-3 px-2 text-indigo-600">{formatMoney(row.refundTotal)}</td>
+                  <td className="text-right py-3 px-2 font-semibold text-slate-800">{formatMoney(row.netConsume)}</td>
+                </tr>
+              ))}
+              {monthlySummary.rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-slate-400">该月暂无交易记录</td>
+                </tr>
+              )}
+              {monthlySummary.rows.length > 0 && (
+                <tr className="bg-cream-50 font-semibold">
+                  <td className="py-3 px-2 text-slate-700">合计</td>
+                  <td className="text-right py-3 px-2 text-slate-700">{formatMoney(monthlySummary.totals.originalTotal)}</td>
+                  <td className="text-right py-3 px-2 text-teal-600">-{formatMoney(monthlySummary.totals.discountTotal)}</td>
+                  <td className="text-right py-3 px-2 text-coral-600">{formatMoney(monthlySummary.totals.deductTotal)}</td>
+                  <td className="text-right py-3 px-2 text-indigo-600">{formatMoney(monthlySummary.totals.refundTotal)}</td>
+                  <td className="text-right py-3 px-2 text-slate-800">{formatMoney(monthlySummary.totals.netConsume)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {expandedService && (() => {
+          const row = monthlySummary.rows.find((r) => r.serviceName === expandedService);
+          if (!row) return null;
+          return (
+            <div className="mt-4 p-4 rounded-xl bg-cream-50 border border-cream-100">
+              <p className="text-sm font-semibold text-slate-700 mb-3">{row.serviceName} - 交易明细</p>
+              <div className="space-y-2">
+                {row.deducts.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-100 last:border-0">
+                    <span className="text-slate-500">{formatDate(tx.createdAt)}</span>
+                    <span className="text-coral-600 font-medium">-{formatMoney(tx.amount)} (扣费)</span>
+                    <span className="text-slate-400">{tx.orderNo || '-'}</span>
+                  </div>
+                ))}
+                {row.refunds.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between text-xs py-1.5 border-b border-slate-100 last:border-0">
+                    <span className="text-slate-500">{formatDate(tx.createdAt)}</span>
+                    <span className="text-indigo-600 font-medium">+{formatMoney(tx.amount)} (退款)</span>
+                    <span className="text-slate-400">{tx.orderNo || '-'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+      </Card>
+
+      <Card>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div className="inline-flex p-1 rounded-xl bg-slate-100 w-fit">
             {typeFilters.map((f) => (
@@ -268,6 +453,19 @@ export default function Billing() {
               >
                 <option value="">全部服务</option>
                 {uniqueServiceNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500 flex items-center gap-1"><Users className="w-3 h-3" />照护人员</label>
+              <select
+                value={filterCaregiver}
+                onChange={(e) => setFilterCaregiver(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-white border border-slate-200 focus:border-coral-300 focus:outline-none text-sm text-slate-700 min-w-[140px]"
+              >
+                <option value="">全部人员</option>
+                {uniqueCaregiverNames.map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
               </select>
@@ -372,16 +570,36 @@ export default function Billing() {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p
-                    className={cn(
-                      'text-lg font-bold font-serif',
-                      tx.type === 'recharge' || tx.type === 'refund'
-                        ? 'text-teal-600'
-                        : 'text-coral-600'
-                    )}
-                  >
-                    {(tx.type === 'recharge' || tx.type === 'refund' ? '+' : '-') + formatMoney(tx.amount)}
-                  </p>
+                  <div className="flex items-center gap-2 justify-end">
+                    <p
+                      className={cn(
+                        'text-lg font-bold font-serif',
+                        tx.type === 'recharge' || tx.type === 'refund'
+                          ? 'text-teal-600'
+                          : 'text-coral-600'
+                      )}
+                    >
+                      {(tx.type === 'recharge' || tx.type === 'refund' ? '+' : '-') + formatMoney(tx.amount)}
+                    </p>
+                    {(tx.type === 'deduct' || tx.type === 'refund') && tx.bookingId && (() => {
+                      const bk = serviceBookings.find((b) => b.id === tx.bookingId);
+                      if (!bk) return null;
+                      const statusConfig: Record<string, { label: string; color: string }> = {
+                        completed: { label: '已完成', color: 'bg-emerald-100 text-emerald-700' },
+                        cancelled: { label: '已取消', color: 'bg-red-100 text-red-700' },
+                        in_progress: { label: '进行中', color: 'bg-amber-100 text-amber-700' },
+                        pending: { label: '待确认', color: 'bg-blue-100 text-blue-700' },
+                        confirmed: { label: '已确认', color: 'bg-sky-100 text-sky-700' },
+                      };
+                      const cfg = statusConfig[bk.status];
+                      if (!cfg) return null;
+                      return (
+                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap', cfg.color)}>
+                          {cfg.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
                   <p className="text-xs text-slate-400 mt-0.5">
                     余额 {formatMoney(tx.balanceAfter)}
                   </p>
